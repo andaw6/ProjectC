@@ -71,17 +71,16 @@ int getListePresence(PRESENCE *presences);
 void marquerPresence(ETUDIANT etudiant, int status);
 int ajouterPresence(PRESENCE presence);
 int estMarquerPresent(ETUDIANT etudiant);
-// void afficherLaListeEtudiant(void);
-void marquerAbsent(void);
+void afficherLaListeDesPresence(void);
 int menuClass(void);
 int afficherListeClasse(char *classe, ETUDIANT* etudiantClass);
+int menuGestionFichier(void);
 
 
 // Le programme principal
 int main(){
-
+    // afficherLaListeDesPresence();
     menuConnection();
-    // PRESENCE presence[SIZE_PRESENCES];
 
     
     return 0;
@@ -220,10 +219,20 @@ void menuConnection(void){
                 ETUDIANT etudiants[SIZE_ETUDIANTS];
                 switch (choix){
                     case 1:
-                    case 2:
                     case 4:
                         puts("\nOption indisponible.\n");
                         break;
+                    case 2:
+                        do{
+                            ch = menuGestionFichier();
+                            if(ch == 1){
+                                system("clear");
+                                afficherLaListeDesPresence();
+                            }
+                        }while(ch != 2);
+                        system("clear");
+                        continue;
+                        
                     case 3:
                         
                         switch (menuClass())
@@ -310,6 +319,7 @@ int getAllLogins(CONNEXION *logins){
     if(file == NULL) generateLogin();
         
     CONNEXION connect;
+    
     // On récupere les connections des utilisateurs
     while (fread(&connect, sizeof(CONNEXION), 1, file)){
         logins[size++] = connect;
@@ -474,18 +484,17 @@ int ajouterEtudiant(ETUDIANT etudiant){
 void marquerPresence(ETUDIANT etudiant, int status){
     PRESENCE presence;
     
-    DATE date = getDateActuel();
-    HEURE heure = getHeureActuel();
-    presence.etudiant = etudiant;
-    presence.date = date;
-    presence.heure = heure;
-    presence.status = status;
-    
     if(estMarquerPresent(etudiant)){
-        puts("\nVous êtes déja marquer présent\n");
+        printf("\nSalut %s %s, vous êtes déja marquer présent à %d:%d\n", etudiant.prenom, etudiant.nom, presence.heure.heure, presence.heure.minute);
     }else{
+        DATE date = getDateActuel();
+        HEURE heure = getHeureActuel();
+        presence.etudiant = etudiant;
+        presence.date = date;
+        presence.heure = heure;
+        presence.status = status;
         if(ajouterPresence(presence) && status==1){
-            printf("Salut %s %s vous être marquer presence le %02d/%02d/%02d à %02d:%02d:%02d\n", etudiant.prenom, etudiant.nom, date.jour, date.mois, date.annee, heure.heure, heure.minute, heure.second);
+            printf("\nSalut %s %s vous être marquer presence le %02d/%02d/%02d à %02d:%02d:%02d\n", etudiant.prenom, etudiant.nom, date.jour, date.mois, date.annee, heure.heure, heure.minute, heure.second);
         }
     }
 }
@@ -542,12 +551,13 @@ int ajouterPresence(PRESENCE presence){
 }
 
 int estMarquerPresent(ETUDIANT etudiant){
-    PRESENCE presence[SIZE_PRESENCES];
+    PRESENCE presences[SIZE_PRESENCES];
     ETUDIANT etud;
-    int size = getListeAllPresenceToday(presence);
+    int size = getListeAllPresenceToday(presences);
     for(int i =0; i<size;i++){
-        etud = presence[i].etudiant;
-        if(etud.id == etudiant.id && presence[i].status == 1) return 1;
+        etud = presences[i].etudiant;
+        if(etud.id == etudiant.id && presences[i].status == 1)
+            return 1;
     }
     return 0;
 }
@@ -567,4 +577,35 @@ int afficherListeClasse(char *classe, ETUDIANT* etudiantClass){
         }
     }
     return size1;
+}
+
+void afficherLaListeDesPresence(){
+    ETUDIANT etudiants[SIZE_ETUDIANTS], etud;
+    PRESENCE precences[SIZE_PRESENCES];
+    DATE date= getDateActuel();
+    int sizeP = getListeAllPresenceToday(precences);
+    int sizeE = getAllEtudiant(etudiants);
+    
+    printf("Pour la date %02d/%02d/%d\n",date.jour, date.mois, date.annee);
+    puts("La liste des présences et absence. \n");
+    
+    for(int i=0, j=0; i<sizeE; i++){
+        etud = etudiants[i];
+        char *status = estMarquerPresent(etud)?" present":"absent";
+        printf("- %s | %s | %s | %s\n", etud.prenom, etud.nom, etud.classe, status);
+    }
+    
+}
+
+int menuGestionFichier(){
+    int choix;
+    do
+    {
+        puts("\n1) Afficher la liste des presences: ");
+        puts("2) Retour");
+        printf("\nVotre choix: ");
+        if(scanf("%d", &choix) != 1) error();
+    } while (choix != 1 && choix != 2);
+    
+    return choix;
 }
