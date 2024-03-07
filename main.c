@@ -4,6 +4,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <time.h>
+#include <errno.h> 
 
 #define FILE_LOGIN "login.bin"
 #define SIZE_LOGINS 20
@@ -33,6 +34,8 @@ typedef struct{
     char prenom[30];
     char nom[20];
     char classe[10];
+    char matricule[11];
+    char codeQR[10];
 } ETUDIANT;
 
 typedef struct{
@@ -75,11 +78,12 @@ void afficherLaListeDesPresence(void);
 int menuClass(void);
 int afficherListeClasse(char *classe, ETUDIANT* etudiantClass);
 int menuGestionFichier(void);
-
+void afficherLaListeDesPresence1();
+int verifiCodeQR(char code[], ETUDIANT *etud);
 
 // Le programme principal
 int main(){
-    // afficherLaListeDesPresence();
+    
     menuConnection();
 
     
@@ -90,16 +94,16 @@ int main(){
 
 void generateListEtudiant(){
     ETUDIANT LIST_ETUDIANT[9] = {
-        //id  Prenom    Nom      Classe 
-        {1, "Fatou",   "Diop",   "DEV WEB" }, 
-        {2, "Abdou",   "Ndiaye", "DEV WEB" },
-        {3, "Khady",   "Diallo", "REF DIG" },
-        {4, "Issa",    "Fall",   "REF DIG" },
-        {5, "Mamadou", "Sow",    "REF DIG" },
-        {6, "Khalifa", "Ciss",   "DEV DATA"},
-        {7, "Lamine",  "Wade",   "DEV DATA"},
-        {8, "Amadou",  "Ndoye",  "DEV DATA"},
-        {9, "Awa",     "Faye",   "DEV DATA"}
+        //id  Prenom    Nom      Classe  MAT-FS0052
+        {1, "Fatou",   "Diop",   "DEV WEB" , "MAT-FD0001", "202401"}, 
+        {2, "Abdou",   "Ndiaye", "DEV WEB" , "MAT-AN0002", "202402"},
+        {3, "Khady",   "Diallo", "REF DIG" , "MAT-KD0003", "202403"},
+        {4, "Issa",    "Fall",   "REF DIG" , "MAT-IF0004", "202404"},
+        {5, "Mamadou", "Sow",    "REF DIG" , "MAT-MS0005", "202405"},
+        {6, "Khalifa", "Ciss",   "DEV DATA", "MAT-KC0006", "202406"},
+        {7, "Lamine",  "Wade",   "DEV DATA", "MAT-LW0007", "202407"},
+        {8, "Amadou",  "Ndoye",  "DEV DATA", "MAT-AN0008", "202408"},
+        {9, "Awa",     "Faye",   "DEV DATA", "MAT-AF0009", "202409"}
     };
     
     FILE *file=fopen(FILE_ETUDIANT, "wb");
@@ -214,12 +218,13 @@ void menuConnection(void){
         system("clear"); // Nétoyage du terminal
         if(connect.status == 1){
             do{
+                system("clear");
                 choix = menuAdmin();
                 system("clear");
                 ETUDIANT etudiants[SIZE_ETUDIANTS];
                 switch (choix){
                     case 1:
-                    case 4:
+                    case 4: 
                         puts("\nOption indisponible.\n");
                         break;
                     case 2:
@@ -227,32 +232,64 @@ void menuConnection(void){
                             ch = menuGestionFichier();
                             if(ch == 1){
                                 system("clear");
-                                afficherLaListeDesPresence();
+                                afficherLaListeDesPresence1();
                             }
                         }while(ch != 2);
                         system("clear");
                         continue;
                         
                     case 3:
-                        
-                        switch (menuClass())
+                        getchar();
+                        int quitter = 1, i=0; char code[10], nm;
+                        ETUDIANT etudiant;
+                        while (quitter)
                         {
-                            case 1:
-                                size = afficherListeClasse("DEV WEB", etudiants);
-                                break;
-                            case 2:
-                                size = afficherListeClasse("DEV DATA", etudiants);
-                                break;
-                            case 3:
-                                size = afficherListeClasse("REF DIG", etudiants);
-                                break;
+                            puts("");
+                            i = 0;
+                            while(1){
+                                printf("Donner votre code QR: ");
+                                nm = getchar();
+                                while (nm != '\n'){
+                                    if(i==6){
+                                        puts("\nErreur: le code QR ne peut pas dépasser 6 caractère.");
+                                        nm = ' ';
+                                    }
+                                    if(nm != ' '){
+                                        code[i] = nm; i++;
+                                    }else{
+                                        while(getchar() != '\n');
+                                        i = 0;
+                                        break;
+                                    }
+                                    nm = getchar();
+                                }
+                                
+                                if(i != 0) break;
+                                else{
+                                    puts("\nErreur: votre code QR est erronée.\n");
+                                }
+                                
+                            }
+                            
+                            if(i==1 && (code[0] == 'q' || code[0] == 'Q')){
+                                puts("\n\tVeuillez vous authentifier.\n");
+                                getPassWord(code);
+                                if(strcmp(code, connect.password) == 0){
+                                    quitter = 0;
+                                }else{
+                                    system("clear");
+                                    puts("Vous n'êtes pas le admin. Donc vous ne pouvez pas quitter.");
+                                }
+                            }else{
+                                if(verifiCodeQR(code, &etudiant)){
+                                    system("clear");
+                                    marquerPresence(etudiant, 1);   
+                                }else{
+                                    puts("\nErreur: vous vous êtes tromper sur la code QR. Réessayez svp...");
+                                }
+                            }
                         }
-                        do{
-                            printf("\nVotre choix: ");
-                            if(scanf("%d", &ch) != 1) error(); 
-                        }while(ch<1||ch>size);
                         
-                        marquerPresence(etudiants[ch-1], 1);
                         
                     break;
                 }
@@ -450,9 +487,9 @@ int getAllEtudiant(ETUDIANT *etudiants){
     int size = 0;
     
     if(file == NULL){
-        // file = fopen(FILE_ETUDIANT, "wb");
         generateListEtudiant();
     }
+    
     
     ETUDIANT etudiant;
     while(fread(&etudiant, sizeof(ETUDIANT), 1, file)){
@@ -485,7 +522,7 @@ void marquerPresence(ETUDIANT etudiant, int status){
     PRESENCE presence;
     
     if(estMarquerPresent(etudiant)){
-        printf("\nSalut %s %s, vous êtes déja marquer présent à %d:%d\n", etudiant.prenom, etudiant.nom, presence.heure.heure, presence.heure.minute);
+        printf("\nSalut %s %s, vous êtes déja marquer présent\n", etudiant.prenom, etudiant.nom);
     }else{
         DATE date = getDateActuel();
         HEURE heure = getHeureActuel();
@@ -608,4 +645,74 @@ int menuGestionFichier(){
     } while (choix != 1 && choix != 2);
     
     return choix;
+}
+
+
+void generateListePresent(){
+    DATE date = getDateActuel();
+    PRESENCE presences[SIZE_PRESENCES];
+    char fichier[30];// liste_present_7_3_2024.txt;
+    sprintf(&fichier, "liste_present_%02d_%02d_%d.txt", date.jour, date.mois, date.annee);
+    FILE *file = fopen(fichier, "w");
+
+}
+
+
+void afficherLaListeDesPresence1(){
+    ETUDIANT etudiants[SIZE_ETUDIANTS], etud;
+    PRESENCE precences[SIZE_PRESENCES];
+    DATE date= getDateActuel();
+    int sizeP = getListeAllPresenceToday(precences);
+    int sizeE = getAllEtudiant(etudiants);
+    char status[sizeE][8];
+    
+    puts("La liste des présences et absences.");
+    printf("Pour la date %02d/%02d/%d\n\n",date.jour, date.mois, date.annee);
+    
+    
+    int i, j, maxLongueurs[4] = {0};
+    
+    // Trouver les longueurs maximales des chaînes pour chaque champ
+    for (i = 0; i < sizeE; i++) {
+        char *st = estMarquerPresent(etudiants[i])?"present":"absent ";
+        strcpy(status[i], st);
+        // status[i] = estMarquerPresent(etudiants[i])?" present":"absent";
+        maxLongueurs[0] = (strlen(etudiants[i].prenom) > maxLongueurs[0]) ? strlen(etudiants[i].prenom) : maxLongueurs[0];
+        maxLongueurs[1] = (strlen(etudiants[i].nom) > maxLongueurs[1]) ? strlen(etudiants[i].nom) : maxLongueurs[1];
+        maxLongueurs[2] = (strlen(etudiants[i].classe) > maxLongueurs[2]) ? strlen(etudiants[i].classe) : maxLongueurs[2];
+        maxLongueurs[3] = (strlen(status[i]) > maxLongueurs[3]) ? strlen(status[i]) : maxLongueurs[3];
+    }
+    
+    printf("| %-*s | %-*s | %-*s | %-*s |\n", maxLongueurs[0], "Prenom", maxLongueurs[1], "Nom", maxLongueurs[2], "Classe", maxLongueurs[3], "Statut");
+    // Afficher l'en-tête du tableau
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < maxLongueurs[i] + 2; j++)
+            printf("*");
+        printf(" ");
+    }
+    printf("\n");
+    
+    // Afficher le contenu du tableau
+    for (i = 0; i < sizeE; i++) {
+        printf("| %-*s | %-*s | %-*s | %-*s |\n", maxLongueurs[0], etudiants[i].prenom, maxLongueurs[1], etudiants[i].nom, maxLongueurs[2], etudiants[i].classe, maxLongueurs[3], status[i]);
+    }
+    
+    // Afficher le pied du tableau
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < maxLongueurs[i] + 2; j++)
+            printf("*");
+        printf(" ");
+    }
+    printf("\n");
+}
+
+int verifiCodeQR(char code[], ETUDIANT *etud){
+    ETUDIANT etudiants[SIZE_ETUDIANTS];
+    int size = getAllEtudiant(etudiants);
+    for(int i=0; i<size; i++){
+        *etud = etudiants[i];
+        char cd[10];
+        if(strcmp(code, etud->codeQR) == 0) return 1;
+    }
+    return 0;
 }
