@@ -1,10 +1,11 @@
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h> 
 #include <termios.h>
 #include <unistd.h>
 #include <time.h>
-#include <errno.h> 
+#include <errno.h>
 
 #define FILE_LOGIN "login.bin"
 #define SIZE_LOGINS 20
@@ -21,13 +22,9 @@ typedef struct{
     char password[20];
 } CONNEXION;
 
-typedef struct{
-    int jour, mois, annee;
-} DATE;
+typedef struct{ int jour, mois, annee; } DATE;
 
-typedef struct{
-    int heure, minute, second;
-} HEURE;
+typedef struct{ int heure, minute, second; } HEURE;
 
 typedef struct{
     int id;
@@ -47,43 +44,45 @@ typedef struct{
 
 
 // Déclaration des prototypes
-void generateLogin(void);
-void error(void);
+int ajouterEtudiant(ETUDIANT etudiant);
 int menuAdmin(void);
+int ajouterPresence(PRESENCE presence);
 int menuEtudiant(void);
 int menuEtudiant(void);
+int menuClass(void);
 int sauveConnection(CONNEXION connect);
-void menuConnection(void);
 int getAllLogins(CONNEXION *logins);
 int loginExist(CONNEXION connect, CONNEXION *logins, int size);
+int getChoice(char *message);
+int verifiCodeQR(char code[], ETUDIANT *etud);
+int getAllEtudiant(ETUDIANT *etudiants);
+int estMarquerPresent(ETUDIANT etudiant);
+int menuGestionFichier(void);
+int dateIsEqual(DATE date1, DATE date2);
+int afficherListeClasse(char *classe, ETUDIANT* etudiantClass);
+int getListePresence(PRESENCE *presences);
+int getListPresenceDate(PRESENCE *presences, DATE date);
 CONNEXION getLogin(void);
 CONNEXION getConnection(void);
-void desactiver(void);
-void getPassWord(char * password);
-void reactiver(void);
-int getChoice(char *message);
 DATE getDateActuel(void);
 HEURE getHeureActuel(void);
 ETUDIANT getEtudiant(int id);
-int getAllEtudiant(ETUDIANT *etudiants);
+void error(void);
+void desactiver(void);
+void generateLogin(void);
+void getPassWord(char * password);
+void reactiver(void);
 void generateListEtudiant(void);
-int ajouterEtudiant(ETUDIANT etudiant);
-int dateIsEqual(DATE date1, DATE date2);
-int getListeAllPresenceToday(PRESENCE *presences);
-int getListePresence(PRESENCE *presences);
+void menuConnection(void);
 void marquerPresence(ETUDIANT etudiant, int status);
-int ajouterPresence(PRESENCE presence);
-int estMarquerPresent(ETUDIANT etudiant);
 void afficherLaListeDesPresence(void);
-int menuClass(void);
-int afficherListeClasse(char *classe, ETUDIANT* etudiantClass);
-int menuGestionFichier(void);
-void afficherLaListeDesPresence1();
-int verifiCodeQR(char code[], ETUDIANT *etud);
+void afficherContinuer(void);
+void generateFichierPresent(DATE date);
+
 
 // Le programme principal
 int main(){
-    
+
     menuConnection();
 
     
@@ -94,7 +93,7 @@ int main(){
 
 void generateListEtudiant(){
     ETUDIANT LIST_ETUDIANT[9] = {
-        //id  Prenom    Nom      Classe  MAT-FS0052
+        //id  Prenom    Nom       Classe       matricule    code QR
         {1, "Fatou",   "Diop",   "DEV WEB" , "MAT-FD0001", "202401"}, 
         {2, "Abdou",   "Ndiaye", "DEV WEB" , "MAT-AN0002", "202402"},
         {3, "Khady",   "Diallo", "REF DIG" , "MAT-KD0003", "202403"},
@@ -228,11 +227,13 @@ void menuConnection(void){
                         puts("\nOption indisponible.\n");
                         break;
                     case 2:
+                        generateFichierPresent(getDateActuel());
+                        puts("La liste des présences d'aujourd'hui a été générer dans un fichier.\n");
                         do{
                             ch = menuGestionFichier();
                             if(ch == 1){
                                 system("clear");
-                                afficherLaListeDesPresence1();
+                                afficherLaListeDesPresence();
                             }
                         }while(ch != 2);
                         system("clear");
@@ -242,18 +243,19 @@ void menuConnection(void){
                         getchar();
                         int quitter = 1, i=0; char code[10], nm;
                         ETUDIANT etudiant;
+                        
                         while (quitter)
                         {
-                            puts("");
+                            // system("clear");
+                            puts("-------------------------------------------------------------");
+                            puts("------------------> MARQUER LES PRESENCES <------------------");
+                            puts("-------------------------------------------------------------\n");
                             i = 0;
                             while(1){
-                                printf("Donner votre code QR: ");
+                                printf("Entrer votre code [Q pour quitter]: ");
                                 nm = getchar();
                                 while (nm != '\n'){
-                                    if(i==6){
-                                        puts("\nErreur: le code QR ne peut pas dépasser 6 caractère.");
-                                        nm = ' ';
-                                    }
+                                    if(i==6) nm = ' ';
                                     if(nm != ' '){
                                         code[i] = nm; i++;
                                     }else{
@@ -266,9 +268,9 @@ void menuConnection(void){
                                 
                                 if(i != 0) break;
                                 else{
-                                    puts("\nErreur: votre code QR est erronée.\n");
+                                    puts("❌ Code invalide!!!");
+                                    afficherContinuer();
                                 }
-                                
                             }
                             
                             if(i==1 && (code[0] == 'q' || code[0] == 'Q')){
@@ -277,15 +279,15 @@ void menuConnection(void){
                                 if(strcmp(code, connect.password) == 0){
                                     quitter = 0;
                                 }else{
-                                    system("clear");
-                                    puts("Vous n'êtes pas le admin. Donc vous ne pouvez pas quitter.");
+                                    puts("\n❌ Vous n'êtes pas le admin.");
+                                    afficherContinuer();
                                 }
                             }else{
                                 if(verifiCodeQR(code, &etudiant)){
-                                    system("clear");
                                     marquerPresence(etudiant, 1);   
                                 }else{
-                                    puts("\nErreur: vous vous êtes tromper sur la code QR. Réessayez svp...");
+                                    puts("❌ Code invalide!!!");
+                                    afficherContinuer();
                                 }
                             }
                         }
@@ -302,6 +304,7 @@ void menuConnection(void){
                 choix = menuEtudiant();
                 switch (choix){
                     case 1:
+                        getchar();
                         marquerPresence(etudiant, 1);
                         break;
                     case 2:
@@ -316,8 +319,6 @@ void menuConnection(void){
         system("clear");
         if(!getChoice("\nVoulez-vous vous reconnecter")) quit = 0;
     }
-        
-
 }
 
 int getChoice(char *message){
@@ -347,6 +348,7 @@ CONNEXION getConnection(){
             puts("\nLe login ou le mot de pass n'est pas correcte\n");
         }
     }
+
 }
 
 int getAllLogins(CONNEXION *logins){
@@ -479,6 +481,7 @@ ETUDIANT getEtudiant(int id){
     for(int i=0; i<size; i++){
         if(etudiants[i].id == id) return etudiants[i];
     }
+    
     return e;
 }
 
@@ -487,9 +490,9 @@ int getAllEtudiant(ETUDIANT *etudiants){
     int size = 0;
     
     if(file == NULL){
+        // file = fopen(FILE_ETUDIANT, "wb");
         generateListEtudiant();
     }
-    
     
     ETUDIANT etudiant;
     while(fread(&etudiant, sizeof(ETUDIANT), 1, file)){
@@ -522,7 +525,9 @@ void marquerPresence(ETUDIANT etudiant, int status){
     PRESENCE presence;
     
     if(estMarquerPresent(etudiant)){
-        printf("\nSalut %s %s, vous êtes déja marquer présent\n", etudiant.prenom, etudiant.nom);
+    
+        printf("\nSalut %s %s, vous êtes déja marquer présent\n\n", etudiant.prenom, etudiant.nom);
+        afficherContinuer();    
     }else{
         DATE date = getDateActuel();
         HEURE heure = getHeureActuel();
@@ -530,8 +535,10 @@ void marquerPresence(ETUDIANT etudiant, int status){
         presence.date = date;
         presence.heure = heure;
         presence.status = status;
+        char nm;
         if(ajouterPresence(presence) && status==1){
-            printf("\nSalut %s %s vous être marquer presence le %02d/%02d/%02d à %02d:%02d:%02d\n", etudiant.prenom, etudiant.nom, date.jour, date.mois, date.annee, heure.heure, heure.minute, heure.second);
+            printf("✅ Code Valide, %s %s est présent à %02d:%02d:%02d\n", etudiant.prenom, etudiant.nom, heure.heure, heure.minute, heure.second);
+            afficherContinuer();
         }
     }
 }
@@ -546,19 +553,6 @@ int getListePresence(PRESENCE *presences){
     while (fread(&presence, sizeof(PRESENCE), 1, file))
     {
         presences[size++] = presence;
-    }
-    
-    return size;
-}
-
-// Fonction pour donner la liste de tout les étudiants
-int getListeAllPresenceToday(PRESENCE *presences){
-    PRESENCE presenceToday[SIZE_PRESENCES], presence;
-    int size=0, size1 = getListePresence(presenceToday);
-    for(int i=0; i<size1;i++){
-        presence = presenceToday[i];
-        if(dateIsEqual(getDateActuel(), presence.date))
-            presences[size++] = presence;
     }
     
     return size;
@@ -590,7 +584,7 @@ int ajouterPresence(PRESENCE presence){
 int estMarquerPresent(ETUDIANT etudiant){
     PRESENCE presences[SIZE_PRESENCES];
     ETUDIANT etud;
-    int size = getListeAllPresenceToday(presences);
+    int size = getListPresenceDate(presences, getDateActuel());
     for(int i =0; i<size;i++){
         etud = presences[i].etudiant;
         if(etud.id == etudiant.id && presences[i].status == 1)
@@ -613,26 +607,11 @@ int afficherListeClasse(char *classe, ETUDIANT* etudiantClass){
             printf("%d- %s %s\n", size1, etud.prenom, etud.nom);
         }
     }
+    
+    
     return size1;
 }
 
-void afficherLaListeDesPresence(){
-    ETUDIANT etudiants[SIZE_ETUDIANTS], etud;
-    PRESENCE precences[SIZE_PRESENCES];
-    DATE date= getDateActuel();
-    int sizeP = getListeAllPresenceToday(precences);
-    int sizeE = getAllEtudiant(etudiants);
-    
-    printf("Pour la date %02d/%02d/%d\n",date.jour, date.mois, date.annee);
-    puts("La liste des présences et absence. \n");
-    
-    for(int i=0, j=0; i<sizeE; i++){
-        etud = etudiants[i];
-        char *status = estMarquerPresent(etud)?" present":"absent";
-        printf("- %s | %s | %s | %s\n", etud.prenom, etud.nom, etud.classe, status);
-    }
-    
-}
 
 int menuGestionFichier(){
     int choix;
@@ -647,22 +626,11 @@ int menuGestionFichier(){
     return choix;
 }
 
-
-void generateListePresent(){
-    DATE date = getDateActuel();
-    PRESENCE presences[SIZE_PRESENCES];
-    char fichier[30];// liste_present_7_3_2024.txt;
-    sprintf(&fichier, "liste_present_%02d_%02d_%d.txt", date.jour, date.mois, date.annee);
-    FILE *file = fopen(fichier, "w");
-
-}
-
-
-void afficherLaListeDesPresence1(){
+void afficherLaListeDesPresence(){
     ETUDIANT etudiants[SIZE_ETUDIANTS], etud;
     PRESENCE precences[SIZE_PRESENCES];
     DATE date= getDateActuel();
-    int sizeP = getListeAllPresenceToday(precences);
+    int sizeP = getListPresenceDate(precences, date);
     int sizeE = getAllEtudiant(etudiants);
     char status[sizeE][8];
     
@@ -704,6 +672,7 @@ void afficherLaListeDesPresence1(){
         printf(" ");
     }
     printf("\n");
+    
 }
 
 int verifiCodeQR(char code[], ETUDIANT *etud){
@@ -714,5 +683,47 @@ int verifiCodeQR(char code[], ETUDIANT *etud){
         char cd[10];
         if(strcmp(code, etud->codeQR) == 0) return 1;
     }
+    
     return 0;
+}
+
+void afficherContinuer(void){
+    char nm;
+    puts("Appuyer sur une touche pour continuer...");
+    scanf("%c", &nm);
+    system("clear");
+}
+
+int getListPresenceDate(PRESENCE *presences, DATE date){
+    PRESENCE allpresences[SIZE_PRESENCES];
+    int i, size = 0, size1 = getListePresence(allpresences);
+    for(i=0;i<size1; i++){
+        if(dateIsEqual(date, allpresences[i].date)){
+            presences[size++] = allpresences[i];
+        }
+    }
+    return size;
+}
+
+void generateFichierPresent(DATE date){
+    PRESENCE presence[SIZE_PRESENCES];
+    ETUDIANT etud; HEURE heure;
+    int size = getListPresenceDate(presence, date);
+    char fichier[30];
+    sprintf(fichier, "liste_presente_%02d_%02d_%d.txt", date.jour, date.mois, date.annee);
+    FILE *file = fopen(fichier, "w");
+
+    if(file == NULL){
+        puts("Impossible de générer la fiche des présences");
+    }else{
+        fprintf(file, "La liste des présences pour la date %02d/%02d/%04d.\n", date.jour, date.mois, date.annee);
+        for(int i=0; i<size;i++){
+            etud = presence[i].etudiant;
+            heure = presence[i].heure;
+            fprintf(file, "Prenom et Nom: %s %s, Class: %s s'est présenté à %02d:%02d:%02d.\n", etud.prenom, etud.nom, etud.classe, heure.heure, heure.minute, heure.second);   
+        }
+        
+    }
+
+    fclose(file);   
 }
