@@ -13,6 +13,7 @@
 #define SIZE_ETUDIANTS 20
 #define FILE_PRESENCE "presence.bin"
 #define SIZE_PRESENCES 50
+#define FILE_LISTE_PRESENCE "liste_presence.txt"
 
 
 typedef struct{
@@ -46,6 +47,7 @@ typedef struct{
 // Déclaration des prototypes
 int ajouterEtudiant(ETUDIANT etudiant);
 int menuAdmin(void);
+int menuAdmin1(void);
 int ajouterPresence(PRESENCE presence);
 int menuEtudiant(void);
 int menuEtudiant(void);
@@ -62,8 +64,10 @@ int dateIsEqual(DATE date1, DATE date2);
 int afficherListeClasse(char *classe, ETUDIANT* etudiantClass);
 int getListePresence(PRESENCE *presences);
 int getListPresenceDate(PRESENCE *presences, DATE date);
+int dateEstValide(DATE date);
 CONNEXION getLogin(void);
 CONNEXION getConnection(void);
+DATE obtenirDate(void);
 DATE getDateActuel(void);
 HEURE getHeureActuel(void);
 ETUDIANT getEtudiant(int id);
@@ -78,16 +82,25 @@ void marquerPresence(ETUDIANT etudiant, int status);
 void afficherLaListeDesPresence(void);
 void afficherContinuer(void);
 void generateFichierPresent(DATE date);
+void generateFichierListePresent(void);
+char* formater(char *prenom, char *nom, char *classe, char *heure, int max);
+
+
 
 
 // Le programme principal
 int main(){
 
+    // generateFichierListePresent();
     menuConnection();
 
     
     return 0;
 }
+
+
+
+
 
 // L'implémentation des corps des fonctions
 
@@ -110,7 +123,7 @@ void generateListEtudiant(){
     
     for(int i=0; i<9;i++){
         ajouterEtudiant(LIST_ETUDIANT[i]);
-    }
+    } 
 
 }
 
@@ -134,8 +147,50 @@ void generateLogin(){
     
     for (int i=0; i<10; i++){
         sauveConnection(LIST_LOGIN[i]);
-    }
+    } 
     
+}
+
+int menuAdmin1(){
+    int selected = 0;
+    char menu[5][25] = {
+        "GESTION DES ÉTUDIANTS ",
+        "GÉNÉRATION DE FICHIERS",
+        "MARQUER LES PRÉSENCES ",
+        "ENVOYER UN MESSAGE",
+        "QUITTER"
+    };
+    char touch;
+    struct termios old_settings, new_settings;
+
+    puts("Appuyez sur la touche A pour monter et Q pour descendre:");
+    tcgetattr(STDIN_FILENO, &old_settings);
+    new_settings = old_settings;
+    new_settings.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_settings);
+    setbuf(stdin, NULL); // Disable buffering
+    
+    int nb = 0;
+    
+    do{
+        system("clear");
+        puts("----- MENU ADMINISTRATEUR ------");
+        for(int i=0; i<5; i++){
+            nb = (i == selected)?41:0;
+            printf("\033[%dm%s\033[0m\n", nb, menu[i]);
+        }
+        // puts("Pour descendre ou monter appyer sur la touche 'A'");
+        touch = getchar();
+        if (touch == 'a' || touch == 'A') {
+            selected++;
+            if(selected == 5) selected = 0;
+        }
+    
+    }while(touch != '\n');
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_settings);
+  
+    return selected+1;
 }
 
 int menuAdmin(){
@@ -219,6 +274,7 @@ void menuConnection(void){
             do{
                 system("clear");
                 choix = menuAdmin();
+                // choix = menuAdmin1();
                 system("clear");
                 ETUDIANT etudiants[SIZE_ETUDIANTS];
                 switch (choix){
@@ -227,15 +283,22 @@ void menuConnection(void){
                         puts("\nOption indisponible.\n");
                         break;
                     case 2:
-                        generateFichierPresent(getDateActuel());
-                        puts("La liste des présences d'aujourd'hui a été générer dans un fichier.\n");
+                        generateFichierListePresent();
+                        puts("La liste de tout les présences a été générer dans un fichier liste_presence.txt.\n");
                         do{
                             ch = menuGestionFichier();
                             if(ch == 1){
                                 system("clear");
+                                DATE dt = obtenirDate();
+                                generateFichierPresent(dt);
+                            }
+                            else if (choix == 2)
+                            {
+                                system("clear");
                                 afficherLaListeDesPresence();
                             }
-                        }while(ch != 2);
+                            
+                        }while(ch != 3);
                         system("clear");
                         continue;
                         
@@ -617,11 +680,12 @@ int menuGestionFichier(){
     int choix;
     do
     {
-        puts("\n1) Afficher la liste des presences: ");
-        puts("2) Retour");
+        puts("\n1) Générer la liste des présences par date");
+        puts("2) Afficher la liste des presences d'aujourd'hi: ");
+        puts("3) Retour");
         printf("\nVotre choix: ");
         if(scanf("%d", &choix) != 1) error();
-    } while (choix != 1 && choix != 2);
+    } while (choix < 1 || choix > 3);
     
     return choix;
 }
@@ -706,24 +770,145 @@ int getListPresenceDate(PRESENCE *presences, DATE date){
 }
 
 void generateFichierPresent(DATE date){
-    PRESENCE presence[SIZE_PRESENCES];
-    ETUDIANT etud; HEURE heure;
-    int size = getListPresenceDate(presence, date);
-    char fichier[30];
-    sprintf(fichier, "liste_presente_%02d_%02d_%d.txt", date.jour, date.mois, date.annee);
-    FILE *file = fopen(fichier, "w");
-
-    if(file == NULL){
-        puts("Impossible de générer la fiche des présences");
+    PRESENCE presences[SIZE_PRESENCES], presence;
+    ETUDIANT etud; char heure[9];
+    int size = getListPresenceDate(presences, date);
+    system("clear");
+    if(size == 0){
+        printf("Pour la date %02d/%02d/%d il y a pas de présence.\n", date.jour, date.mois, date.annee);
     }else{
-        fprintf(file, "La liste des présences pour la date %02d/%02d/%04d.\n", date.jour, date.mois, date.annee);
-        for(int i=0; i<size;i++){
-            etud = presence[i].etudiant;
-            heure = presence[i].heure;
-            fprintf(file, "Prenom et Nom: %s %s, Class: %s s'est présenté à %02d:%02d:%02d.\n", etud.prenom, etud.nom, etud.classe, heure.heure, heure.minute, heure.second);   
-        }
         
+        char fichier[30];
+        sprintf(fichier, "liste_presente_%02d_%02d_%d.txt", date.jour, date.mois, date.annee);
+        FILE *file = fopen(fichier, "w");
+    
+        int i, maxL[4]={0}, max = 0;
+    
+        date = presences[0].date;
+        maxL[3] = 8; 
+        
+        for (i = 0; i < size; i++) {
+            etud = presences[i].etudiant;
+            maxL[0] = (strlen(etud.prenom) > maxL[0]) ? strlen(etud.prenom) : maxL[0];
+            maxL[1] = (strlen(etud.nom) > maxL[1]) ? strlen(etud.nom) : maxL[1];
+            maxL[2] = (strlen(etud.classe) > maxL[2]) ? strlen(etud.classe) : maxL[2];
+        }  
+        for(i=0; i<4;i++)
+            if(maxL[i]>max) max = maxL[i];
+        
+        int taille = (max*4)+13;
+        char etoile[taille+1];
+        memset(etoile, ' ', taille);
+        
+        for(i=0; i<taille;i++) etoile[i]='*';
+        etoile[taille]='\00';
+      
+        fprintf(file, "La liste des présences pour la date %02d/%02d/%d est:\n", date.jour, date.mois, date.annee);
+        fprintf(file, "\n%s\n", formater("Prenom", "Nom", "Classe", "Heure", max));
+        fprintf(file, "%s \n", etoile);
+    
+        for (int i = 0; i<size;i++){
+            presence = presences[i];
+            etud = presence.etudiant;
+            sprintf(heure, "%02d:%02d:%02d", presence.heure.heure, presence.heure.minute, presence.heure.second);
+            fprintf(file, "%s\n", formater(etud.prenom, etud.nom, etud.classe, heure, max));
+        }
+        fprintf(file, "%s\n", etoile);
+        fclose(file);
+        
+        printf("La liste des présences pour la date %02d/%02d/%02d a été générer dans le fichier %s.\n", date.jour, date.mois, date.annee, fichier);
     }
+}
 
-    fclose(file);   
+
+char* formater(char *prenom, char *nom, char *classe, char *heure, int max){
+    char information[100];
+    char *info = information;
+    
+    sprintf(information, "| %-*s | %-*s | %-*s | %-*s |", max, prenom, max, nom, max, classe, max, heure);
+    
+    return info;
+}
+
+
+void generateFichierListePresent(){
+    FILE *file = fopen(FILE_LISTE_PRESENCE, "w");
+    PRESENCE presences[SIZE_PRESENCES], presence;
+    ETUDIANT etud;  DATE date;
+    char heure[9];
+    int size = getListePresence(presences);
+    int i, maxL[4]={0}, max = 0;
+    
+    date = presences[0].date;
+    maxL[3] = 8; 
+    
+    for (i = 0; i < size; i++) {
+        etud = presences[i].etudiant;
+        maxL[0] = (strlen(etud.prenom) > maxL[0]) ? strlen(etud.prenom) : maxL[0];
+        maxL[1] = (strlen(etud.nom) > maxL[1]) ? strlen(etud.nom) : maxL[1];
+        maxL[2] = (strlen(etud.classe) > maxL[2]) ? strlen(etud.classe) : maxL[2];
+    }
+    
+    for(i=0; i<4;i++)
+        if(maxL[i]>max) max = maxL[i];
+    int taille = (max*4)+13;
+    char etoile[taille+1];
+    memset(etoile, ' ', taille);
+    
+    for(i=0; i<taille;i++) etoile[i]='*';
+    etoile[taille]='\00';
+  
+    fprintf(file, "La liste des présences pour la date %02d/%02d/%d est:\n", date.jour, date.mois, date.annee);
+    fprintf(file, "\n%s\n", formater("Prenom", "Nom", "Classe", "Heure", max));
+    fprintf(file, "%s \n", etoile);
+    
+    for (int i = 0; i<size;){
+        presence = presences[i];
+        etud = presence.etudiant;
+        sprintf(heure, "%02d:%02d:%02d", presence.heure.heure, presence.heure.minute, presence.heure.second);
+        if(dateIsEqual(presence.date, date)){
+            // fprintf("| %-*s | %-*s | %-*s | %-*s |\n", max, etud.prenom, max, etud.nom, max, etud.classe, max, heure);
+            fprintf(file, "%s\n", formater(etud.prenom, etud.nom, etud.classe, heure, max));
+            i++;
+        }else{
+            date = presences[i].date;
+            fprintf(file, "%s \n", etoile);
+            fprintf(file, "\n\nLa liste des présences pour la date %02d/%02d/%d est:\n", date.jour, date.mois, date.annee);
+            fprintf(file, "\n%s\n", formater("Prenom", "Nom", "Classe", "Heure", max));
+            fprintf(file, "%s\n", etoile);
+        }   
+    }
+    fprintf(file, "%s\n", etoile);
+    
+
+    fclose(file);
+}
+
+DATE obtenirDate(){
+    DATE date; int i=0;
+    do{
+        if(i > 1){
+            puts("La date n'est pas valide. Recommencez.\n");
+        }i++;
+        printf("Donner une date au format(jj/mm/aaaa): ");
+        if(scanf("%d/%d/%d", &date.jour, &date.mois, &date.annee) != 3) error();
+    }while(!dateEstValide(date));
+    return date;
+}
+
+int dateEstValide(DATE date){
+    int jour = date.jour, mois = date.mois, annee = date.annee;
+    
+    if(mois<1 || mois>12 || annee<1 || jour < 1) return 0;
+    if(mois == 2){
+        if(annee%400==0 || (annee%4==0 && annee%100!=0)){
+            return jour>29 ? 0 : 1;
+        }else{
+            return jour>28 ? 0 : 1;
+        }
+    }
+    else if(mois==6 || mois==4 || mois==9 || mois==11)
+        return jour>30 ? 0 : 1;
+    else 
+        return jour>31 ? 0 : 1;
 }
